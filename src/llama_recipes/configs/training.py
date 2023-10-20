@@ -36,3 +36,5 @@ class train_config:
     use_fast_kernels: bool = False # Enable using SDPA from PyTroch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     use_profiler: bool = False # Enable PyTorch profiling
     profiler_log_path: str = "./logs/tensorboard"
+    snapshot_memory: bool = False # Grab a memory snapshot https://pytorch.org/docs/main/torch_cuda_memory.html
+    memory_snapshot_path: str = "./mem_snapshot.pickle"

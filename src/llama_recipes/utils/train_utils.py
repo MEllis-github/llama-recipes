@@ -7,6 +7,7 @@ import yaml
 from pathlib import Path
 from pkg_resources import packaging
 from contextlib import nullcontext
+from warnings import warn
 
 import torch
 import torch.cuda.nccl as nccl
@@ -51,6 +52,11 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
 
     Returns: results dictionary containing average training and validation perplexity and loss
     """
+    if train_config.use_profiler and train_config.snapshot_memory:
+        warn("Both PyTorch profiling and memory snapshot are enabled.")
+    if train_config.use_profiler or train_config.snapshot_memory:
+        warn("Profiling/tracing enabled: performance will be impacted.")
+
     profiler = get_profiler(train_config)
     # Create a gradient scaler for fp16
     if train_config.use_fp16 and train_config.enable_fsdp:
@@ -67,6 +73,10 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
     checkpoint_times = []
     results = {}
     best_val_loss = float("inf")
+
+    if train_config.snapshot_memory:
+        torch.cuda.memory._record_memory_history()
+
     for epoch in range(train_config.num_epochs):
         epoch_start_time = time.perf_counter()
         with MemoryTrace() as memtrace:  # track the memory usage
@@ -193,6 +203,10 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                 print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s")
         else:
             print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s")
+
+    if train_config.snapshot_memory:
+        torch.cuda.memory._dump_snapshot(f"{train_config.memory_snapshot_path}")
+
     avg_epoch_time = sum(epoch_times)/ len(epoch_times)
     avg_checkpoint_time = sum(checkpoint_times)/ len(checkpoint_times) if len(checkpoint_times) > 0 else 0
     avg_train_prep = sum(train_prep)/len(train_prep)
