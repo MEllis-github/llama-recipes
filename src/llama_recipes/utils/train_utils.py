@@ -74,8 +74,8 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
     results = {}
     best_val_loss = float("inf")
 
-    if train_config.snapshot_memory:
-        torch.cuda.memory._record_memory_history()
+    if train_config.snapshot_memory: #TODO add torch >= 2.1.0 version checks
+        torch.cuda.memory._record_memory_history() #(enabled=True)
 
     for epoch in range(train_config.num_epochs):
         epoch_start_time = time.perf_counter()
@@ -109,7 +109,8 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                             optimizer.step()
                             optimizer.zero_grad()
                             pbar.update(1)
-                    profiler.step()
+
+                    if train_config.use_profiler: profiler.step()
 
                 pbar.set_description(f"Training Epoch: {epoch+1}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()})")
             pbar.close()
@@ -198,6 +199,10 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                     print(f"best eval loss on epoch {epoch+1} is {best_val_loss}")
             val_loss.append(best_val_loss)
             val_prep.append(eval_ppl)
+
+            if train_config.snapshot_memory:
+                torch.cuda.memory._dump_snapshot(f"{train_config.memory_snapshot_path}")
+
         if train_config.enable_fsdp:
             if rank==0:
                 print(f"Epoch {epoch+1}: train_perplexity={train_perplexity:.4f}, train_epoch_loss={train_epoch_loss:.4f}, epoch time {epoch_end_time}s")
